@@ -1,0 +1,254 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy a service on AWS Fargate, hosted in a private subnet, but accessible via a public load balancer.
+Parameters:
+  StackName:
+    Type: String
+    Default: mystack-network
+    Description: The name of the environment to add this service to
+  ServiceName:
+    Type: String
+    Default: nginx
+    Description: A name for the service
+  HealthCheckIntervalSeconds:
+    Type: Number
+    Default: 5
+  HealthCheckPath:
+    Type: String
+    Default: /
+    Description: Path to perform the healthcheck on each instance.
+  ImageUrl:
+    Type: String
+    Default: nginx
+    Description: The url of a docker image that contains the application process that
+                 will handle the traffic for this service
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: What port number the application inside the docker container is binding to
+  ContainerCpu:
+    Type: Number
+    Default: 256
+    Description: How much CPU to give the container. 1024 is 1 CPU
+  ContainerMemory:
+    Type: Number
+    Default: 512
+    Description: How much memory in megabytes to give the container
+  Path:
+    Type: String
+    Default: "*"
+    Description: A path on the load balancer that this service
+                 should be connected to. Use * to send all load balancer
+                 traffic to this service.
+  Priority:
+    Type: Number
+    Default: 1
+    Description: The priority for the routing rule added to the load balancer.
+                 This only applies if your have multiple services which have been
+                 assigned to different paths on the load balancer.
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: How many copies of the service task to run
+  Role:
+    Type: String
+    Default: ""
+    Description: (Optional) An IAM role to give the service's containers if the code within needs to
+                 access other AWS resources like S3 buckets, DynamoDB tables, etc
+
+Conditions:
+  HasCustomRole: !Not [ !Equals [!Ref 'Role', ''] ]
+
+# Enable Blue/Green Deploy
+Transform:
+  - 'AWS::CodeDeployBlueGreen'
+Hooks:
+  CodeDeployBlueGreenHook:
+    Properties:
+      TrafficRoutingConfig:
+        Type: TimeBasedCanary
+        TimeBasedCanary:
+          StepPercentage: 15
+          BakeTimeMins: 5
+      Applications:
+        - Target:
+            Type: 'AWS::ECS::Service'
+            LogicalID: ECSService
+          ECSAttributes:
+            TaskDefinitions:
+              - BlueTaskDefinition
+              - GreenTaskDefinition
+            TaskSets:
+              - BlueTaskSet
+              - GreenTaskSet
+            TrafficRouting:
+              ProdTrafficRoute:
+                Type: 'AWS::ElasticLoadBalancingV2::Listener'
+                LogicalID: PublicLoadBalancerListener
+              TargetGroups:
+                - ALBTargetGroupBlue
+                - ALBTargetGroupGreen
+    Type: 'AWS::CodeDeploy::BlueGreen'
+
+Resources:
+  # A log group for storing the stdout logs from this service's containers
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ${StackName}-service-${ServiceName}
+
+  ALBTargetGroupBlue:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: !Ref 'HealthCheckIntervalSeconds'
+      HealthCheckPath: !Ref 'HealthCheckPath'
+      HealthCheckPort: '80'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 2
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Group
+          Value: !Sub ${ServiceName}-ALBTargetGroupBlue
+      TargetType: ip
+      UnhealthyThresholdCount: 2
+      VpcId: !ImportValue VpcId
+
+  ALBTargetGroupGreen:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: !Ref 'HealthCheckIntervalSeconds'
+      HealthCheckPath: !Ref 'HealthCheckPath'
+      HealthCheckPort: '80'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 2
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Group
+          Value: !Sub ${ServiceName}-ALBTargetGroupGreen
+      TargetType: ip
+      UnhealthyThresholdCount: 4
+      VpcId: !ImportValue VpcId
+
+# Listener
+  PublicLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref ALBTargetGroupBlue
+          Type: 'forward'
+      LoadBalancerArn: !ImportValue PublicLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  # Create a rule on the load balancer for routing traffic to the target group
+  LoadBalancerListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroupBlue
+          Type: 'forward'
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: User-Agent
+            Values:
+              - Mozilla
+      ListenerArn: !Ref PublicLoadBalancerListener 
+      Priority: !Ref 'Priority'
+  # The task definition. This is a simple metadata description of what
+  # container to run, and what resource requirements it has.
+  BlueTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref 'ServiceName'
+      Cpu: !Ref 'ContainerCpu'
+      Memory: !Ref 'ContainerMemory'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !ImportValue ECSTaskExecutionRole
+      TaskRoleArn:
+        Fn::If:
+          - 'HasCustomRole'
+          - !Ref 'Role'
+          - !Ref "AWS::NoValue"
+      ContainerDefinitions:
+        - Name: !Ref 'ServiceName'
+          Cpu: !Ref 'ContainerCpu'
+          Memory: !Ref 'ContainerMemory'
+          Image: !Ref 'ImageUrl'
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref 'ContainerPort'
+              HostPort: 80
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Sub ${StackName}-service-${ServiceName}
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: !Ref 'ServiceName'
+  # Create ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref 'ServiceName'
+      Cluster: !ImportValue ECSCluster
+      DeploymentController: 
+        Type: CODE_DEPLOY
+      DesiredCount: !Ref 'DesiredCount'
+      HealthCheckGracePeriodSeconds: 300
+      LaunchType: FARGATE
+      LoadBalancers: 
+        - ContainerName: !Ref 'ServiceName'
+          ContainerPort: !Ref 'ContainerPort'
+          TargetGroupArn: !Ref ALBTargetGroupBlue
+      NetworkConfiguration:
+        AwsVpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue ContainerSecurityGroup
+          Subnets:
+            - !ImportValue PrivateSubnetOne
+            - !ImportValue PrivateSubnetTwo
+      SchedulingStrategy: REPLICA
+      TaskDefinition: !Ref BlueTaskDefinition
+    DependsOn: PublicLoadBalancerListener
+  # # Create Task Set
+  # BlueTaskSet:
+  #   Type: 'AWS::ECS::TaskSet'
+  #   Properties:
+  #     Cluster: !ImportValue ECSCluster
+  #     LaunchType: FARGATE
+  #     NetworkConfiguration:
+  #       AwsVpcConfiguration:
+  #         AssignPublicIp: ENABLED
+  #         SecurityGroups:
+  #           - !ImportValue PublicLoadBalancerSG
+  #         Subnets:
+  #           - !ImportValue PublicSubnetOne
+  #           - !ImportValue PublicSubnetTwo
+  #     PlatformVersion: 1.4.0
+  #     Scale:
+  #       Unit: PERCENT
+  #       Value: 100
+  #     Service: !Ref ECSService
+  #     TaskDefinition: !Ref BlueTaskDefinition
+  #     LoadBalancers:
+  #       - ContainerName: !Ref ServiceName
+  #         ContainerPort: !Ref 'ContainerPort'
+  #         TargetGroupArn: !Ref ALBTargetGroupBlue
+  # # Primary task set
+  # PrimaryTaskSet:
+  #   Type: 'AWS::ECS::PrimaryTaskSet'
+  #   Properties:
+  #     Cluster: !ImportValue ECSCluster
+  #     Service: !Ref ECSService
+  #     TaskSetId: !GetAtt 
+  #       - BlueTaskSet
+  #       - Id
