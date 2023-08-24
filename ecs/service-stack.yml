@@ -219,36 +219,3 @@ Resources:
       SchedulingStrategy: REPLICA
       TaskDefinition: !Ref BlueTaskDefinition
     DependsOn: PublicLoadBalancerListener
-  # # Create Task Set
-  # BlueTaskSet:
-  #   Type: 'AWS::ECS::TaskSet'
-  #   Properties:
-  #     Cluster: !ImportValue ECSCluster
-  #     LaunchType: FARGATE
-  #     NetworkConfiguration:
-  #       AwsVpcConfiguration:
-  #         AssignPublicIp: ENABLED
-  #         SecurityGroups:
-  #           - !ImportValue PublicLoadBalancerSG
-  #         Subnets:
-  #           - !ImportValue PublicSubnetOne
-  #           - !ImportValue PublicSubnetTwo
-  #     PlatformVersion: 1.4.0
-  #     Scale:
-  #       Unit: PERCENT
-  #       Value: 100
-  #     Service: !Ref ECSService
-  #     TaskDefinition: !Ref BlueTaskDefinition
-  #     LoadBalancers:
-  #       - ContainerName: !Ref ServiceName
-  #         ContainerPort: !Ref 'ContainerPort'
-  #         TargetGroupArn: !Ref ALBTargetGroupBlue
-  # # Primary task set
-  # PrimaryTaskSet:
-  #   Type: 'AWS::ECS::PrimaryTaskSet'
-  #   Properties:
-  #     Cluster: !ImportValue ECSCluster
-  #     Service: !Ref ECSService
-  #     TaskSetId: !GetAtt 
-  #       - BlueTaskSet
-  #       - Id

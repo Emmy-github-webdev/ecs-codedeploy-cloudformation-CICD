@@ -1,0 +1,12 @@
+{
+    "applicationName": "nginxApplication",
+    "deploymentGroupName": "nginxCodeDeployDeploymentGroup",
+    "revision": {
+        "revisionType": "S3",
+        "s3Location": {
+            "bucket": "korsgy-cloudformation",
+            "key": "appspec.yaml",
+            "bundleType": "YAML"
+        }
+    }
+}

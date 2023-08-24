@@ -177,39 +177,13 @@ Resources:
           Value: publicLoadBalancer
       Type: application
       IpAddressType: ipv4
-  # A dummy target group is used to setup the ALB to just drop traffic
-  # initially, before any real service target groups have been added.
-  # DummyTargetGroupPublic:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 6
-  #     HealthCheckPath: /
-  #     HealthCheckProtocol: HTTP
-  #     HealthCheckTimeoutSeconds: 5
-  #     HealthyThresholdCount: 2
-  #     Port: 80
-  #     Protocol: HTTP
-  #     UnhealthyThresholdCount: 2
-  #     VpcId: !Ref 'VPC'
-  # PublicLoadBalancerListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   DependsOn:
-  #     - PublicLoadBalancer
-  #   Properties:
-  #     DefaultActions:
-  #       - TargetGroupArn: !Ref 'DummyTargetGroupPublic'
-  #         Type: 'forward'
-  #     LoadBalancerArn: !Ref 'PublicLoadBalancer'
-  #     Port: 80
-  #     Protocol: HTTP
-
   ####
   # ECS related resources
   ####
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: 'enhanced-architecture-fargate'
+      ClusterName: 'ngnix-cluster'
   ContainerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
