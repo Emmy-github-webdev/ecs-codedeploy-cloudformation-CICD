@@ -17,6 +17,7 @@ Parameters:
   GitHubApplicationRepoURL:
     Description: GitHub repository URL of the application
     Type: String
+    Default: https://github.com/Emmy-github-webdev/aws-ecs-pipeline-with-blue-green-deployment.git
 
   CodeDeployApplicationName:
     Description: CodeDeploy application name
@@ -41,26 +42,32 @@ Parameters:
   GitHubApplicationOwner:
     Description: GitHub owner of the application repository
     Type: String
+    Default: Emmy-github-webdev
 
   GitHubApplicationRepo:
     Description: GitHub repository of the application
     Type: String
+    Default: aws-ecs-pipeline-with-blue-green-deployment
 
   GitHubApplicationBranch:
     Description: GitHub branch of the application repository
-    Type: String  
+    Type: String
+    Default: main
 
   GitHubCodeDeployConfigOwner:
     Description: GitHub owner of the CodeDeploy configuration repository
     Type: String
+    Default: Emmy-github-webdev
 
   GitHubCodeDeployConfigRepo:
     Description: GitHub repository of the CodeDeploy configuration
     Type: String
+    Default: aws-ecs-pipeline-with-blue-green-deployment
 
   GitHubCodeDeployConfigBranch:
     Description: GitHub branch of the CodeDeplpy configuration repository
-    Type: String  
+    Type: String 
+    Default: main 
 
   RegionName:
     Description: Region name

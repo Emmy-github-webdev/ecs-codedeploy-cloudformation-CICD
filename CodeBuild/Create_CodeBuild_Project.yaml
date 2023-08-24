@@ -5,10 +5,12 @@ Parameters:
   CodeBuildProjectName:
     Description: CodeBuild project name
     Type: String
+    Default: nginxCodeBuild
 
   GitHubApplicationRepoURL:
     Description: GitHub repository URL of the application
     Type: String
+    Default: https://github.com/Emmy-github-webdev/aws-ecs-pipeline-with-blue-green-deployment.git
 
 Resources:
   CodeBuildServiceRole:

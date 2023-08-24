@@ -18,7 +18,6 @@ Parameters:
     Description: Path to perform the healthcheck on each instance.
   ImageUrl:
     Type: String
-    Default: nginx
     Description: The url of a docker image that contains the application process that
                  will handle the traffic for this service
   ContainerPort:
